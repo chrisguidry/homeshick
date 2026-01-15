@@ -1,5 +1,46 @@
 #!/usr/bin/env bash
 
+# ==============================================================================
+# Workaround for uutils coreutils dirname incompatibility
+# ==============================================================================
+#
+# PROBLEM:
+# Ubuntu 24.04+ ships uutils coreutils (Rust) instead of GNU coreutils.
+# uutils `dirname` handles paths ending with "/." differently than GNU:
+#
+#   GNU coreutils:   dirname "/home/user/." -> "/home/user"
+#   uutils:          dirname "/home/user/." -> "/home"
+#
+# IMPACT:
+# homeshick's abs_path() function (below) uses `dirname "$path"` where $path
+# ends with "/." to resolve directory paths. The uutils behavior causes
+# create_rel_path() to compute incorrect relative paths, resulting in broken
+# symlinks like:
+#
+#   .bashrc -> chris/.homesick/repos/dotfiles/home/.bashrc  (BROKEN)
+#
+# instead of:
+#
+#   .bashrc -> .homesick/repos/dotfiles/home/.bashrc        (CORRECT)
+#
+# SOLUTION:
+# Override dirname with GNU version when available. On Ubuntu 24.04+, GNU
+# coreutils is installed as gnu-coreutils with commands prefixed "gnu*".
+# On macOS with Homebrew coreutils, it's prefixed "g*".
+#
+# REFERENCES:
+# - uutils PR for POSIX compliance: https://github.com/uutils/coreutils/pull/8936
+# - This fork: https://github.com/chrisguidry/homeshick
+#
+# ==============================================================================
+if command -v gnudirname &>/dev/null; then
+  # Ubuntu 24.04+ with gnu-coreutils package installed
+  dirname() { command gnudirname "$@"; }
+elif command -v gdirname &>/dev/null; then
+  # macOS with Homebrew coreutils installed
+  dirname() { command gdirname "$@"; }
+fi
+
 castle_exists() {
   local action=$1
   local castle=$2
